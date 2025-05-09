@@ -56,6 +56,8 @@ export default defineConfig((ctx) => {
 
             // extendViteConf (viteConf) {},
             // viteVuePluginOptions: {},
+
+            // Unfortunately publicPath is not considered. Therefore explicitly set it here again.
             extendViteConf(viteConf) {
                 viteConf.base = './'
             },
