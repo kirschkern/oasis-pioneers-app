@@ -14,7 +14,6 @@
                     dense
                     outlined
                     options-dense
-                    style="width: 120px"
                     class="q-ml-md"
                     @update:model-value="setLang"
                 >
@@ -24,15 +23,26 @@
                             v-on="scope.itemEvents"
                             class="row items-center"
                         >
-                            <span class="q-mr-sm">{{ scope.opt.icon }}</span>
+                            <span class="q-mr-sm" style="font-size: 140%">{{
+                                scope.opt.icon
+                            }}</span>
                             {{ scope.opt.label }}
                         </q-item>
+                    </template>
+
+                    <template v-slot:selected>
+                        <div class="row items-center">
+                            <span class="q-mr-sm" style="font-size: 140%">
+                                {{ langOptions.find((opt) => opt.value === locale)?.icon }}
+                            </span>
+                            <!-- {{ langOptions.find((opt) => opt.value === locale)?.label }} -->
+                        </div>
                     </template>
                 </q-select>
             </q-toolbar>
         </q-header>
 
-        <q-drawer v-model="leftDrawerOpen" show-if-above bordered class="bg-grey-1">
+        <q-drawer v-if="drawerEnabled" v-model="leftDrawerOpen" bordered class="bg-grey-1">
             <q-list>
                 <q-item clickable tag="router-link" to="/rent-calculator">
                     <q-item-section avatar>
@@ -54,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const leftDrawerOpen = ref(false)
@@ -65,11 +75,22 @@ const langOptions = [
     { label: 'Nederlands', value: 'nl-NL', icon: '🇳🇱' },
 ]
 
+const drawerEnabled = ref(true)
+
 onMounted(() => {
     const storedLang = localStorage.getItem('lang')
     if (storedLang && langOptions.some((opt) => opt.value === storedLang)) {
         locale.value = storedLang
     }
+    // Drawer-Status aus LocalStorage laden
+    const storedDrawer = localStorage.getItem('leftDrawerOpen')
+    if (storedDrawer !== null) {
+        leftDrawerOpen.value = storedDrawer === 'true'
+    }
+})
+
+watch(leftDrawerOpen, (val) => {
+    localStorage.setItem('leftDrawerOpen', val)
 })
 
 function setLang(val) {

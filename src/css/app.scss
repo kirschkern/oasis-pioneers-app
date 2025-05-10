@@ -1,1 +1,23 @@
 // app global css in SCSS form
+
+.bg-primary-light {
+    background-color: $primary-light;
+}
+
+.bordered {
+    border-width: 1px;
+    border-style: solid;
+    border-color: $border-color;
+}
+
+.square-borders-b {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.text-container {
+    max-width: 720px;
+    margin-inline: auto;
+}
+
+@import 'gap.scss';

@@ -1,1148 +1,255 @@
 <template>
     <q-page class="q-pa-md">
         <div class="row q-mb-md items-center">
-            <div class="text-h4 q-mb-md">{{ $t('rentCalculator.title') }}</div>
+            <div class="text-h4">{{ $t('rentCalculator.title') }}</div>
             <q-space />
             <div class="row q-mb-md items-center">
                 <q-select
-                    v-if="savedEntries.length > 0"
-                    v-model="selectedEntry"
-                    :options="savedEntries"
+                    v-if="store.savedEntries.length > 0"
+                    v-model="store.selectedEntry"
+                    :options="store.savedEntries"
                     option-label="name"
                     option-value="name"
                     :label="$t('rentCalculator.savedCalculations')"
                     dense
-                    style="width: 250px"
+                    style="width: 150px"
                     class="q-mr-md"
-                    @update:model-value="loadEntry"
+                    @update:model-value="store.loadEntry"
                 />
                 <q-btn
-                    v-if="selectedEntry"
+                    v-if="store.selectedEntry"
                     color="primary"
                     icon="delete"
                     flat
-                    @click="deleteEntry(selectedEntry)"
+                    @click="store.deleteEntry(store.selectedEntry)"
                 />
                 <q-btn
                     color="primary"
-                    :label="$t('rentCalculator.save')"
+                    icon="save"
                     @click="showSaveDialog = true"
-                    class="q-mr-md"
+                    flat
+                    :title="$t('rentCalculator.saveCalculation')"
+                />
+                <q-btn
+                    color="primary"
+                    icon="share"
+                    flat
+                    @click="shareCalculation"
+                    :title="$t('rentCalculator.shareCalculation')"
+                />
+                <q-btn
+                    color="primary"
+                    icon="replay"
+                    flat
+                    @click="resetCalculator"
+                    :title="$t('rentCalculator.resetCalculation')"
+                />
+                <q-btn
+                    color="primary"
+                    icon="info"
+                    flat
+                    @click="showInfo = !showInfo"
+                    :title="'Info zur App anzeigen'"
                 />
             </div>
         </div>
 
-        <div class="row q-col-gutter-md no-wrap items-center">
-            <div Xclass="">{{ $t('rentCalculator.houses') }}</div>
-            <q-input
-                type="number"
-                v-model.number="houseCount"
-                filled
-                :min="0"
-                style="font-size: 150%"
-            />
-        </div>
+        <q-slide-transition>
+            <div
+                v-show="showInfo"
+                class="q-mb-md bg-primary-light q-pa-md rounded-borders bordered text-container"
+            >
+                <div class="text-h6 q-mb-sm">Info zur App</div>
+                <div>
+                    <p>
+                        Diese Anwendung soll Dir helfen, die Wirtschaftlichkeit deiner
+                        Ferienhausvermietung im Oasis zu kalkulieren. Anfallende Kosten bei einer
+                        Vermietung über das Oasis werden berücksichtigt. Du kannst sie im Bereich
+                        "Kosten" anpassen.
+                    </p>
+
+                    <p>
+                        Wenn Du "Exakte Monatsberechnung" aktivierst, werden die Kosten tagesgenau
+                        kalkuliert. Ansonsten wird für jeden angefangenen Monat der volle Monat
+                        berechnet.
+                    </p>
+
+                    <p>
+                        Dieses Tool erhebt keinen Anspruch auf Vollständigkeit oder Richtigkeit. Es
+                        soll als Einschätzung der zu erwartenden Einnahmen und Kosten dienen. Die
+                        realen Werte können abweichen.
+                    </p>
+
+                    <p>
+                        Die Daten werden nur lokal auf Deinem Rechner gespeichert, wenn Du die
+                        Speicherfunktion nutzt. Viel Erfolg beim Rechnen!
+                    </p>
+                </div>
+                <div class="text-right">
+                    <q-btn color="primary" @click="showInfo = false">{{ $t('ok') }}</q-btn>
+                </div>
+            </div>
+        </q-slide-transition>
 
         <q-form>
             <div class="row q-col-gutter-md">
-                <!-- HAUPTSAISON -->
-                <div class="col-12 col-md-6 q-col-gutter-xs">
-                    <div class="text-h6">{{ $t('rentCalculator.mainSeason') }}</div>
-                    <div class="caption">{{ $t('rentCalculator.mainDays') }} {{ mainDays }}</div>
-                    <q-slider v-model.number="mainDays" :min="0" :max="365" :step="5" dense />
-                    <div class="caption">
-                        {{ $t('rentCalculator.mainOccupancy') }} {{ mainOccupancy }}%
-                    </div>
-                    <q-slider
-                        v-model.number="mainOccupancy"
+                <RentCalculatorMainSeason />
+                <RentCalculatorOffSeason />
+
+                <div class="row items-center">
+                    <div>{{ $t('rentCalculator.houses') }}</div>
+                    <q-input
+                        type="number"
+                        v-model.number="store.houseCount"
+                        filled
+                        dense
                         :min="0"
-                        :max="100"
-                        :step="5"
-                        :label="$t('rentCalculator.mainOccupancy')"
-                        dense
+                        class="bg-primary q-ml-sm q-mr-xl rounded-borders"
+                        input-class="text-white"
+                        style="font-size: 150%; width: 100px"
+                        @update:model-value="store.selectedEntry = null"
                     />
 
-                    <div class="row items-center q-col-gutter-sm">
-                        <div class="q-mb-sm">{{ $t('rentCalculator.mainCalcType') }}</div>
-
-                        <q-option-group
-                            v-model="mainCalcType"
-                            :options="[
-                                { label: $t('rentCalculator.perBed'), value: 'bed' },
-                                { label: $t('rentCalculator.perRoom'), value: 'room' },
-                                { label: $t('rentCalculator.perHouse'), value: 'house' },
-                            ]"
-                            type="radio"
-                            dense
-                            inline
-                            class="q-mb-sm"
-                        />
-                    </div>
-
-                    <div v-if="mainCalcType === 'bed'">
-                        <div class="caption">{{ $t('rentCalculator.beds') }} {{ beds }}</div>
-                        <q-slider v-model.number="beds" :min="1" :max="10" :step="1" dense />
-                        <div class="caption">
-                            {{ $t('rentCalculator.bedPrice') }} {{ bedPrice }}€
-                        </div>
-                        <q-slider v-model.number="bedPrice" :min="0" :max="200" :step="5" dense />
-                    </div>
-                    <div v-else-if="mainCalcType === 'room'">
-                        <div class="caption">{{ $t('rentCalculator.rooms') }} {{ mainRooms }}</div>
-                        <q-slider v-model.number="mainRooms" :min="1" :max="10" :step="1" dense />
-                        <div class="caption">
-                            {{ $t('rentCalculator.roomPrice') }} {{ roomPrice }}€
-                        </div>
-                        <q-slider v-model.number="roomPrice" :min="0" :max="200" :step="5" dense />
-                    </div>
-                    <div v-else>
-                        <div class="caption">
-                            {{ $t('rentCalculator.housePrice') }} {{ housePrice }}€
-                        </div>
-                        <q-slider v-model.number="housePrice" :min="0" :max="500" :step="5" dense />
-                    </div>
-                    <div class="caption">
-                        {{ $t('rentCalculator.mainCleanings') }} {{ mainCleanings }}
-                    </div>
-                    <q-slider v-model.number="mainCleanings" :min="0" :max="100" :step="5" dense />
-                </div>
-
-                <!-- NEBENSAISON -->
-                <div class="col-12 col-md-6 q-col-gutter-xs">
-                    <div class="text-h6">{{ $t('rentCalculator.offSeason') }}</div>
-                    <div class="caption">{{ $t('rentCalculator.offDays') }} {{ offDays }}</div>
-                    <q-slider v-model.number="offDays" :min="0" :max="365" :step="5" dense />
-                    <div class="caption">
-                        {{ $t('rentCalculator.offOccupancy') }} {{ offOccupancy }}%
-                    </div>
-                    <q-slider
-                        v-model.number="offOccupancy"
-                        :min="0"
-                        :max="100"
-                        :step="5"
-                        :label="$t('rentCalculator.offOccupancy')"
-                        dense
-                    />
-
-                    <div class="q-mb-sm">{{ $t('rentCalculator.mainCalcType') }}</div>
-                    <q-option-group
-                        v-model="offCalcType"
-                        :options="[
-                            { label: $t('rentCalculator.monthlyPrice'), value: 'month' },
-                            { label: $t('rentCalculator.perBed'), value: 'bed' },
-                            { label: $t('rentCalculator.perRoom'), value: 'room' },
-                            { label: $t('rentCalculator.perHouse'), value: 'house' },
-                        ]"
-                        type="radio"
-                        dense
-                        inline
-                        class="q-mb-sm"
-                    />
-                    <div v-if="offCalcType === 'bed'">
-                        <div class="caption">{{ $t('rentCalculator.beds') }} {{ beds }}</div>
-                        <q-slider v-model.number="beds" :min="1" :max="10" :step="1" dense />
-                        <div class="caption">
-                            {{ $t('rentCalculator.bedPrice') }} {{ bedPrice }}€
-                        </div>
-                        <q-slider v-model.number="bedPrice" :min="0" :max="200" :step="5" dense />
-                    </div>
-                    <div v-else-if="offCalcType === 'room'">
-                        <div class="caption">{{ $t('rentCalculator.rooms') }} {{ mainRooms }}</div>
-                        <q-slider v-model.number="mainRooms" :min="1" :max="10" :step="1" dense />
-                        <div class="caption">
-                            {{ $t('rentCalculator.roomPrice') }} {{ roomPrice }}€
-                        </div>
-                        <q-slider v-model.number="roomPrice" :min="0" :max="200" :step="5" dense />
-                    </div>
-                    <div v-else-if="offCalcType === 'house'">
-                        <div class="caption">
-                            {{ $t('rentCalculator.housePrice') }} {{ housePrice }}€
-                        </div>
-                        <q-slider v-model.number="housePrice" :min="0" :max="500" :step="5" dense />
-                    </div>
-                    <div v-else>
-                        <div class="caption">
-                            {{ $t('rentCalculator.monthlyPrice') }} {{ monthlyPrice }}€
-                        </div>
-                        <q-slider
-                            v-model.number="monthlyPrice"
-                            :min="0"
-                            :max="2000"
-                            :step="5"
-                            dense
-                        />
-                    </div>
-                    <div class="caption">
-                        {{ $t('rentCalculator.offCleanings') }} {{ offCleanings }}
-                    </div>
-                    <q-slider v-model.number="offCleanings" :min="0" :max="50" :step="5" dense />
+                    <RentCalculatorCosts />
                 </div>
             </div>
-            <q-list bordered class="rounded-borders q-mt-md">
-                <q-expansion-item
-                    :label="$t('rentCalculator.costs')"
-                    expand-separator
-                    Xcontent-inset-level="1"
-                    header-class="bg-primary text-white"
-                >
-                    <div class="row q-px-lg">
-                        <div class="col-12 col-md-6">
-                            <div class="row items-center q-mt-md">
-                                <div class="text-h6">{{ $t('rentCalculator.general') }}</div>
-                                <q-space />
-                                <q-btn
-                                    color="primary"
-                                    size="sm"
-                                    flat
-                                    icon="refresh"
-                                    :label="$t('rentCalculator.standard')"
-                                    @click.stop="resetCosts"
-                                />
-                            </div>
-                            <div class="caption">
-                                {{ $t('rentCalculator.cleaningCost') }} {{ cleaningCost }}€
-                            </div>
-                            <q-slider
-                                v-model.number="cleaningCost"
-                                :min="0"
-                                :max="100"
-                                :step="5"
-                                dense
-                            />
-                            <div class="caption">
-                                {{ $t('rentCalculator.gasCost') }} {{ gasCost }}€
-                            </div>
-                            <q-slider
-                                v-model.number="gasCost"
-                                :min="0"
-                                :max="500"
-                                :step="5"
-                                dense
-                            />
-                            <div class="caption">
-                                {{ $t('rentCalculator.powerCost') }} {{ powerCost }}€
-                            </div>
-                            <q-slider
-                                v-model.number="powerCost"
-                                :min="0"
-                                :max="200"
-                                :step="5"
-                                dense
-                            />
-                            <div class="caption">
-                                {{ $t('rentCalculator.softwareCost') }} {{ softwareCost }}€
-                            </div>
-                            <q-slider
-                                v-model.number="softwareCost"
-                                :min="0"
-                                :max="100"
-                                :step="5"
-                                dense
-                            />
-                            <div class="caption">
-                                {{ $t('rentCalculator.repairCost') }} {{ repairCost }}€
-                            </div>
-                            <q-slider
-                                v-model.number="repairCost"
-                                :min="0"
-                                :max="200"
-                                :step="5"
-                                dense
-                            />
-                            <div class="caption">
-                                {{ $t('rentCalculator.licenseFee') }}: {{ abgabe }}%
-                            </div>
-                            <q-slider v-model.number="abgabe" :min="0" :max="50" :step="1" dense />
-
-                            <div class="caption">{{ $t('rentCalculator.tax') }} {{ tax }}%</div>
-                            <q-slider v-model.number="tax" :min="0" :max="30" :step="1" dense />
-                        </div>
-                    </div>
-                </q-expansion-item>
-            </q-list>
         </q-form>
 
-        <q-separator class="q-my-lg" />
+        <q-separator class="q-mt-md" />
 
         <div class="text-right">
             <q-toggle
-                v-model="useExactMonths"
+                v-model="store.useExactMonths"
                 :label="$t('rentCalculator.exactMonthCalc')"
                 size="sm"
             />
         </div>
 
-        <div class="row q-col-gutter-md">
-            <div class="col-12 col-md-6">
-                <div class="text-h6">{{ $t('rentCalculator.mainResult') }}</div>
-                <div>
-                    {{ $t('rentCalculator.revenueFull') }}:
-                    <b>{{
-                        mainRevenueFull.toLocaleString('de-DE', {
-                            style: 'currency',
-                            currency: 'EUR',
-                        })
-                    }}</b>
-                </div>
-                <div>
-                    {{ $t('rentCalculator.revenue', { occupancy: mainOccupancy }) }}:
-                    <b>{{
-                        mainRevenue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-                    }}</b>
-                </div>
-                <div>
-                    {{ $t('rentCalculator.costs') }}:
-                    <b>{{
-                        mainCosts.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-                    }}</b>
-                    <q-btn
-                        size="sm"
-                        flat
-                        color="primary"
-                        :label="$t('rentCalculator.details')"
-                        @click="showMainCostDetails = true"
-                    />
-                </div>
-                <div>
-                    {{ $t('rentCalculator.profit') }}:
-                    <b>{{
-                        mainProfit.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-                    }}</b>
-                </div>
-                <div class="q-mt-sm text-bold">{{ $t('rentCalculator.share') }}</div>
-                <div>
-                    {{ $t('rentCalculator.shareAmount', { abgabe: abgabe }) }}
-                    <b>{{
-                        mainRuleAbgabe.toLocaleString('de-DE', {
-                            style: 'currency',
-                            currency: 'EUR',
-                        })
-                    }}</b>
-                </div>
-                <div>
-                    {{ $t('rentCalculator.incomeAmount', { income: 100 - abgabe }) }}
-                    <b>{{
-                        mainRuleEinnahme.toLocaleString('de-DE', {
-                            style: 'currency',
-                            currency: 'EUR',
-                        })
-                    }}</b>
-                </div>
-                <div>
-                    {{ $t('rentCalculator.tax28') }}
-                    <b>{{
-                        mainRuleSteuer.toLocaleString('de-DE', {
-                            style: 'currency',
-                            currency: 'EUR',
-                        })
-                    }}</b>
-                </div>
-                <div class="text-primary">
-                    {{ $t('rentCalculator.afterTax') }}
-                    <b>{{
-                        mainRuleNetto.toLocaleString('de-DE', {
-                            style: 'currency',
-                            currency: 'EUR',
-                        })
-                    }}</b>
-                </div>
-            </div>
-            <div class="col-12 col-md-6">
-                <div class="text-h6">{{ $t('rentCalculator.offResult') }}</div>
-                <div>
-                    {{ $t('rentCalculator.revenueFull') }}:
-                    <b>{{
-                        offRevenueFull.toLocaleString('de-DE', {
-                            style: 'currency',
-                            currency: 'EUR',
-                        })
-                    }}</b>
-                </div>
-                <div>
-                    {{ $t('rentCalculator.revenue', { occupancy: offOccupancy }) }}:
-                    <b>{{
-                        offRevenue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-                    }}</b>
-                </div>
-                <div>
-                    {{ $t('rentCalculator.costs') }}:
-                    <b>{{
-                        offCosts.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-                    }}</b>
-                    <q-btn
-                        size="sm"
-                        flat
-                        color="primary"
-                        :label="$t('rentCalculator.details')"
-                        @click="showOffCostDetails = true"
-                    />
-                </div>
-                <div>
-                    {{ $t('rentCalculator.profit') }}:
-                    <b>{{
-                        offProfit.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-                    }}</b>
-                </div>
-                <div class="q-mt-sm text-bold">{{ $t('rentCalculator.share') }}</div>
-                <div>
-                    {{ $t('rentCalculator.shareAmount', { abgabe: abgabe }) }}
-                    <b>{{
-                        offRuleAbgabe.toLocaleString('de-DE', {
-                            style: 'currency',
-                            currency: 'EUR',
-                        })
-                    }}</b>
-                </div>
-                <div>
-                    {{ $t('rentCalculator.incomeAmount', { income: 100 - abgabe }) }}
-                    <b>{{
-                        offRuleEinnahme.toLocaleString('de-DE', {
-                            style: 'currency',
-                            currency: 'EUR',
-                        })
-                    }}</b>
-                </div>
-                <div>
-                    {{ $t('rentCalculator.tax28') }}
-                    <b>{{
-                        offRuleSteuer.toLocaleString('de-DE', {
-                            style: 'currency',
-                            currency: 'EUR',
-                        })
-                    }}</b>
-                </div>
-                <div class="text-primary">
-                    {{ $t('rentCalculator.afterTax') }}
-                    <b>{{
-                        offRuleNetto.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-                    }}</b>
-                </div>
-            </div>
-        </div>
-        <q-separator class="q-my-lg" />
-        <div class="text-h5">{{ $t('rentCalculator.total') }}</div>
-        <div>
-            {{ $t('rentCalculator.totalRevenue') }}:
-            <b>{{
-                totalRevenue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-            }}</b>
-        </div>
-        <div>
-            {{ $t('rentCalculator.totalCosts') }}:
-            <b>{{ totalCosts.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }) }}</b>
-            <q-btn
-                size="sm"
-                flat
-                color="primary"
-                :label="$t('rentCalculator.details')"
-                @click="showTotalCostDetails = true"
-            />
-        </div>
-        <div>
-            {{ $t('rentCalculator.totalProfit') }}:
-            <b>{{ totalProfit.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }) }}</b>
-        </div>
-        <div class="q-mt-sm text-bold">{{ $t('rentCalculator.share') }}</div>
-        <div>
-            {{ $t('rentCalculator.shareAmount', { abgabe: abgabe }) }}
-            <b>{{
-                totalRuleAbgabe.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-            }}</b>
-        </div>
-        <div>
-            {{ $t('rentCalculator.incomeAmount', { income: 100 - abgabe }) }}
-            <b>{{
-                totalRuleEinnahme.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-            }}</b>
-        </div>
-        <div>
-            {{ $t('rentCalculator.tax28') }}
-            <b>{{
-                totalRuleSteuer.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-            }}</b>
-        </div>
-        <div class="text-primary">
-            {{ $t('rentCalculator.afterTax') }}
-            <b>{{
-                totalRuleNetto.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-            }}</b>
-        </div>
-        <q-dialog v-model="showSaveDialog">
-            <q-card>
-                <q-card-section>
-                    <div class="text-h6">{{ $t('rentCalculator.saveCalculation') }}</div>
-                    <q-input
-                        v-model="saveName"
-                        :label="$t('rentCalculator.name')"
-                        autofocus
-                        @keyup.enter="saveEntry"
-                    />
-                </q-card-section>
-                <q-card-actions align="right">
-                    <q-btn flat :label="$t('rentCalculator.cancel')" v-close-popup />
-                    <q-btn
-                        color="primary"
-                        :label="$t('rentCalculator.save')"
-                        @click="saveEntry"
-                        :disable="!saveName"
-                    />
-                </q-card-actions>
-            </q-card>
-        </q-dialog>
-        <q-dialog v-model="showMainCostDetails">
-            <q-card style="min-width: 350px">
-                <q-card-section>
-                    <div class="text-h6">{{ $t('rentCalculator.mainCostDetails') }}</div>
-                    <q-list dense>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.cleaningCost') }}</q-item-section>
-                            <q-item-section side
-                                >{{ mainCleanings }} × {{ cleaningCost }} € =
-                                {{
-                                    (mainCleanings * cleaningCost).toLocaleString('de-DE', {
-                                        style: 'currency',
-                                        currency: 'EUR',
-                                    })
-                                }}</q-item-section
-                            >
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.power') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths"
-                                    >{{ mainDays }} / 30 × {{ powerCost }} € =
-                                    {{
-                                        ((mainDays / 30) * powerCost).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}</span
-                                >
-                                <span v-else
-                                    >{{ Math.ceil(mainDays / 30) }} × {{ powerCost }} € =
-                                    {{
-                                        (Math.ceil(mainDays / 30) * powerCost).toLocaleString(
-                                            'de-DE',
-                                            { style: 'currency', currency: 'EUR' },
-                                        )
-                                    }}</span
-                                >
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.gas') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ mainMonthFactor.toFixed(2) }} × {{ gasCost }} € =
-                                    {{
-                                        (mainMonthFactor * gasCost).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil(mainDays / 30) }} × {{ gasCost }} € =
-                                    {{
-                                        (Math.ceil(mainDays / 30) * gasCost).toLocaleString(
-                                            'de-DE',
-                                            { style: 'currency', currency: 'EUR' },
-                                        )
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.software') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ mainMonthFactor.toFixed(2) }} × {{ softwareCost }} € =
-                                    {{
-                                        (mainMonthFactor * softwareCost).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil(mainDays / 30) }} × {{ softwareCost }} € =
-                                    {{
-                                        (Math.ceil(mainDays / 30) * softwareCost).toLocaleString(
-                                            'de-DE',
-                                            { style: 'currency', currency: 'EUR' },
-                                        )
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.repair') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ mainMonthFactor.toFixed(2) }} × {{ repairCost }} € =
-                                    {{
-                                        (mainMonthFactor * repairCost).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil(mainDays / 30) }} × {{ repairCost }} € =
-                                    {{
-                                        (Math.ceil(mainDays / 30) * repairCost).toLocaleString(
-                                            'de-DE',
-                                            { style: 'currency', currency: 'EUR' },
-                                        )
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{
-                                $t('rentCalculator.taxDetail', {
-                                    tax: tax,
-                                })
-                            }}</q-item-section>
-                            <q-item-section side>
-                                {{
-                                    (mainRevenue * (tax / 100)).toLocaleString('de-DE', {
-                                        style: 'currency',
-                                        currency: 'EUR',
-                                    })
-                                }}
-                            </q-item-section>
-                        </q-item>
-                        <div class="text-right">
-                            <q-btn
-                                flat
-                                color="primary"
-                                :label="$t('rentCalculator.close')"
-                                v-close-popup
-                            />
-                        </div>
-                    </q-list>
-                </q-card-section>
-            </q-card>
-        </q-dialog>
-        <q-dialog v-model="showOffCostDetails">
-            <q-card style="min-width: 350px">
-                <q-card-section>
-                    <div class="text-h6">{{ $t('rentCalculator.offCostDetails') }}</div>
-                    <q-list dense>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.cleaningCost') }}</q-item-section>
-                            <q-item-section side
-                                >{{ offCleanings }} × {{ cleaningCost }} € =
-                                {{
-                                    (offCleanings * cleaningCost).toLocaleString('de-DE', {
-                                        style: 'currency',
-                                        currency: 'EUR',
-                                    })
-                                }}</q-item-section
-                            >
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.power') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ offDays }} / 30 × {{ powerCost }} € =
-                                    {{
-                                        ((offDays / 30) * powerCost).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil(offDays / 30) }} × {{ powerCost }} € =
-                                    {{
-                                        (Math.ceil(offDays / 30) * powerCost).toLocaleString(
-                                            'de-DE',
-                                            { style: 'currency', currency: 'EUR' },
-                                        )
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.gas') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ offDays }} / 30 × {{ gasCost }} € =
-                                    {{
-                                        ((offDays / 30) * gasCost).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil(offDays / 30) }} × {{ gasCost }} € =
-                                    {{
-                                        (Math.ceil(offDays / 30) * gasCost).toLocaleString(
-                                            'de-DE',
-                                            { style: 'currency', currency: 'EUR' },
-                                        )
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.software') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ offDays }} / 30 × {{ softwareCost }} € =
-                                    {{
-                                        ((offDays / 30) * softwareCost).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil(offDays / 30) }} × {{ softwareCost }} € =
-                                    {{
-                                        (Math.ceil(offDays / 30) * softwareCost).toLocaleString(
-                                            'de-DE',
-                                            { style: 'currency', currency: 'EUR' },
-                                        )
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.repair') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ offDays }} / 30 × {{ repairCost }} € =
-                                    {{
-                                        ((offDays / 30) * repairCost).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil(offDays / 30) }} × {{ repairCost }} € =
-                                    {{
-                                        (Math.ceil(offDays / 30) * repairCost).toLocaleString(
-                                            'de-DE',
-                                            { style: 'currency', currency: 'EUR' },
-                                        )
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{
-                                $t('rentCalculator.taxDetail', {
-                                    tax: tax,
-                                })
-                            }}</q-item-section>
-                            <q-item-section side>
-                                {{
-                                    (offRevenue * (tax / 100)).toLocaleString('de-DE', {
-                                        style: 'currency',
-                                        currency: 'EUR',
-                                    })
-                                }}
-                            </q-item-section>
-                        </q-item>
-                        <div class="text-right">
-                            <q-btn
-                                flat
-                                color="primary"
-                                :label="$t('rentCalculator.close')"
-                                v-close-popup
-                            />
-                        </div>
-                    </q-list>
-                </q-card-section>
-            </q-card>
-        </q-dialog>
-        <q-dialog v-model="showTotalCostDetails">
-            <q-card style="min-width: 350px">
-                <q-card-section>
-                    <div class="text-h6">{{ $t('rentCalculator.totalCostDetails') }}</div>
-                    <q-list dense>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.cleaningCost') }}</q-item-section>
-                            <q-item-section side
-                                >{{ mainCleanings + offCleanings }} × {{ cleaningCost }} € =
-                                {{
-                                    ((mainCleanings + offCleanings) * cleaningCost).toLocaleString(
-                                        'de-DE',
-                                        { style: 'currency', currency: 'EUR' },
-                                    )
-                                }}</q-item-section
-                            >
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.power') }}</q-item-section>
-                            <q-item-section side>
-                                {{
-                                    mainDays +
-                                    offDays +
-                                    ' / 30 × ' +
-                                    powerCost +
-                                    ' € = ' +
-                                    (((mainDays + offDays) / 30) * powerCost).toLocaleString(
-                                        'de-DE',
-                                        { style: 'currency', currency: 'EUR' },
-                                    )
-                                }}
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.gas') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ (mainMonthFactor + offMonthFactor).toFixed(2) }} ×
-                                    {{ gasCost }} € =
-                                    {{
-                                        (
-                                            (mainMonthFactor + offMonthFactor) *
-                                            gasCost
-                                        ).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil((mainDays + offDays) / 30) }} × {{ gasCost }} € =
-                                    {{
-                                        (
-                                            Math.ceil((mainDays + offDays) / 30) * gasCost
-                                        ).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.software') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ (mainMonthFactor + offMonthFactor).toFixed(2) }} ×
-                                    {{ softwareCost }} € =
-                                    {{
-                                        (
-                                            (mainMonthFactor + offMonthFactor) *
-                                            softwareCost
-                                        ).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil((mainDays + offDays) / 30) }} ×
-                                    {{ softwareCost }} € =
-                                    {{
-                                        (
-                                            Math.ceil((mainDays + offDays) / 30) * softwareCost
-                                        ).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{ $t('rentCalculator.repair') }}</q-item-section>
-                            <q-item-section side>
-                                <span v-if="useExactMonths">
-                                    {{ (mainMonthFactor + offMonthFactor).toFixed(2) }} ×
-                                    {{ repairCost }} € =
-                                    {{
-                                        (
-                                            (mainMonthFactor + offMonthFactor) *
-                                            repairCost
-                                        ).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                                <span v-else>
-                                    {{ Math.ceil((mainDays + offDays) / 30) }} × {{ repairCost }} €
-                                    =
-                                    {{
-                                        (
-                                            Math.ceil((mainDays + offDays) / 30) * repairCost
-                                        ).toLocaleString('de-DE', {
-                                            style: 'currency',
-                                            currency: 'EUR',
-                                        })
-                                    }}
-                                </span>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section>{{
-                                $t('rentCalculator.taxDetail', {
-                                    tax: tax,
-                                })
-                            }}</q-item-section>
-                            <q-item-section side>
-                                {{
-                                    ((mainRevenue + offRevenue) * (tax / 100)).toLocaleString(
-                                        'de-DE',
-                                        { style: 'currency', currency: 'EUR' },
-                                    )
-                                }}
-                            </q-item-section>
-                        </q-item>
-                        <div class="text-right">
-                            <q-btn
-                                flat
-                                color="primary"
-                                :label="$t('rentCalculator.close')"
-                                v-close-popup
-                            />
-                        </div>
-                    </q-list>
-                </q-card-section>
-            </q-card>
-        </q-dialog>
+        <RentCalculatorSaveDialog
+            v-model="showSaveDialog"
+            :save-name="store.saveName"
+            :disable-save="!store.saveName"
+            @update:saveName="(val) => (store.saveName = val)"
+            @save="store.saveEntry"
+            @cancel="showSaveDialog = false"
+        />
+        <RentCalculatorCostDetailsDialog
+            v-model="showMainCostDetails"
+            :title="$t('rentCalculator.mainCostDetails')"
+            :items="store.mainCostDetailsItems"
+        />
+        <RentCalculatorCostDetailsDialog
+            v-model="showOffCostDetails"
+            :title="$t('rentCalculator.offCostDetails')"
+            :items="store.offCostDetailsItems"
+        />
+        <RentCalculatorCostDetailsDialog
+            v-model="showTotalCostDetails"
+            :title="$t('rentCalculator.totalCostDetails')"
+            :items="store.totalCostDetailsItems"
+        />
+        <RentCalculatorResult
+            :main-revenue-full="store.mainRevenueFull"
+            :main-occupancy="store.mainOccupancy"
+            :main-revenue="store.mainRevenue"
+            :main-costs="store.mainCosts"
+            :main-profit="store.mainProfit"
+            :main-rule-licence-fee="store.mainRuleLicenceFee"
+            :main-rule-income="store.mainRuleIncome"
+            :main-rule-tax="store.mainRuleTax"
+            :main-rule-netto="store.mainRuleNetto"
+            :licence-fee="store.licenceFee"
+            :off-revenue-full="store.offRevenueFull"
+            :off-occupancy="store.offOccupancy"
+            :off-revenue="store.offRevenue"
+            :off-costs="store.offCosts"
+            :off-profit="store.offProfit"
+            :off-rule-licence-fee="store.offRuleLicenceFee"
+            :off-rule-income="store.offRuleIncome"
+            :off-rule-tax="store.offRuleTax"
+            :off-rule-netto="store.offRuleNetto"
+            :total-revenue="store.totalRevenue"
+            :total-costs="store.totalCosts"
+            :total-profit="store.totalProfit"
+            :total-rule-licence-fee="store.totalRuleLicenceFee"
+            :total-rule-income="store.totalRuleIncome"
+            :total-rule-tax="store.totalRuleTax"
+            :total-rule-netto="store.totalRuleNetto"
+            @show-main-cost-details="showMainCostDetails = true"
+            @show-off-cost-details="showOffCostDetails = true"
+            @show-total-cost-details="showTotalCostDetails = true"
+        />
     </q-page>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import { useRentCalculatorStore } from 'src/stores/rentCalculatorStore'
+import RentCalculatorMainSeason from 'src/components/rent-calculator/RentCalculatorMainSeason.vue'
+import RentCalculatorOffSeason from 'src/components/rent-calculator/RentCalculatorOffSeason.vue'
+import RentCalculatorResult from 'src/components/rent-calculator/RentCalculatorResult.vue'
+import RentCalculatorSaveDialog from 'src/components/rent-calculator/RentCalculatorSaveDialog.vue'
+import RentCalculatorCostDetailsDialog from 'src/components/rent-calculator/RentCalculatorCostDetailsDialog.vue'
+import RentCalculatorCosts from 'src/components/rent-calculator/RentCalculatorCosts.vue'
+import { useQuasar } from 'quasar'
+import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
-// Parameter
-const mainDays = ref(150)
-const offDays = ref(215)
-const mainOccupancy = ref(100)
-const offOccupancy = ref(70)
-const mainCalcType = ref('bed') // 'bed', 'room', 'house'
-const mainRooms = ref(2)
-const roomPrice = ref(75)
-const houseCount = ref(1)
-const bedPrice = ref(45)
-const housePrice = ref(120)
-const monthlyPrice = ref(750)
-const beds = ref(4)
-const mainCleanings = ref(50)
-const offCleanings = ref(5)
-const cleaningCost = ref(35)
-const tax = ref(6)
-const gasCost = ref(20)
-const powerCost = ref(50)
-const softwareCost = ref(10)
-const repairCost = ref(30)
-const offCalcType = ref('month') // 'bed', 'room', 'house', 'month'
+const $q = useQuasar()
+const store = useRentCalculatorStore()
+const route = useRoute()
+const router = useRouter()
+const { t } = useI18n()
+
 const showSaveDialog = ref(false)
-const saveName = ref('')
-const savedEntries = ref([])
-const selectedEntry = ref(null)
-const abgabe = ref(30)
-
-// Toggle für Kostenberechnung
-const useExactMonths = ref(true)
-
-// Monatsfaktoren dynamisch berechnen
-const mainMonthFactor = computed(() =>
-    useExactMonths.value ? mainDays.value / 30 : Math.ceil(mainDays.value / 30),
-)
-const offMonthFactor = computed(() =>
-    useExactMonths.value ? offDays.value / 30 : Math.ceil(offDays.value / 30),
-)
-
-// Einnahmen Hauptsaison
-const mainRevenueFull = computed(() => {
-    if (mainCalcType.value === 'bed') {
-        return bedPrice.value * beds.value * mainDays.value * houseCount.value
-    } else if (mainCalcType.value === 'room') {
-        return roomPrice.value * mainRooms.value * mainDays.value * houseCount.value
-    } else {
-        return housePrice.value * houseCount.value * mainDays.value
-    }
-})
-const mainRevenue = computed(() => mainRevenueFull.value * (mainOccupancy.value / 100))
-// Kosten Hauptsaison
-const mainCosts = computed(
-    () =>
-        mainCleanings.value * cleaningCost.value +
-        (useExactMonths.value ? mainDays.value / 30 : Math.ceil(mainDays.value / 30)) *
-            powerCost.value +
-        (useExactMonths.value ? mainDays.value / 30 : Math.ceil(mainDays.value / 30)) *
-            gasCost.value +
-        (useExactMonths.value ? mainDays.value / 30 : Math.ceil(mainDays.value / 30)) *
-            softwareCost.value +
-        (useExactMonths.value ? mainDays.value / 30 : Math.ceil(mainDays.value / 30)) *
-            repairCost.value +
-        mainRevenue.value * (tax.value / 100),
-)
-const mainSteuer = computed(() => mainRevenue.value * (28 / 100))
-const mainProfit = computed(() => mainRevenue.value - mainCosts.value - mainSteuer.value)
-
-// Einnahmen Nebensaison
-const offRevenueFull = computed(() => {
-    if (offCalcType.value === 'bed') {
-        return bedPrice.value * beds.value * offDays.value * houseCount.value
-    } else if (offCalcType.value === 'room') {
-        return roomPrice.value * mainRooms.value * offDays.value * houseCount.value
-    } else if (offCalcType.value === 'house') {
-        return housePrice.value * houseCount.value * offDays.value
-    } else {
-        return monthlyPrice.value * Math.ceil(offDays.value / 30) * houseCount.value
-    }
-})
-const offRevenue = computed(() => offRevenueFull.value * (offOccupancy.value / 100))
-// Kosten Nebensaison
-const offCosts = computed(
-    () =>
-        offCleanings.value * cleaningCost.value +
-        (useExactMonths.value ? offDays.value / 30 : Math.ceil(offDays.value / 30)) *
-            powerCost.value +
-        (useExactMonths.value ? offDays.value / 30 : Math.ceil(offDays.value / 30)) *
-            gasCost.value +
-        (useExactMonths.value ? offDays.value / 30 : Math.ceil(offDays.value / 30)) *
-            softwareCost.value +
-        (useExactMonths.value ? offDays.value / 30 : Math.ceil(offDays.value / 30)) *
-            repairCost.value +
-        offRevenue.value * (tax.value / 100),
-)
-const offSteuer = computed(() => offRevenue.value * (28 / 100))
-const offProfit = computed(() => offRevenue.value - offCosts.value - offSteuer.value)
-
-// Gesamtergebnis
-const totalRevenue = computed(() => mainRevenue.value + offRevenue.value)
-const totalCosts = computed(() => mainCosts.value + offCosts.value)
-const totalSteuer = computed(() => totalRevenue.value * (28 / 100))
-const totalProfit = computed(() => totalRevenue.value - totalCosts.value - totalSteuer.value)
-
-// 70/30-Regel dynamisch nach Abgabe-Slider
-const mainRuleAbgabe = computed(() => mainProfit.value * (abgabe.value / 100))
-const mainRuleEinnahme = computed(() => mainProfit.value * (1 - abgabe.value / 100))
-const mainRuleSteuer = computed(() => mainRuleEinnahme.value * 0.28)
-const mainRuleNetto = computed(() => mainRuleEinnahme.value - mainRuleSteuer.value)
-
-const offRuleAbgabe = computed(() => offProfit.value * (abgabe.value / 100))
-const offRuleEinnahme = computed(() => offProfit.value * (1 - abgabe.value / 100))
-const offRuleSteuer = computed(() => offRuleEinnahme.value * 0.28)
-const offRuleNetto = computed(() => offRuleEinnahme.value - offRuleSteuer.value)
-
-const totalRuleAbgabe = computed(() => totalProfit.value * (abgabe.value / 100))
-const totalRuleEinnahme = computed(() => totalProfit.value * (1 - abgabe.value / 100))
-const totalRuleSteuer = computed(() => totalRuleEinnahme.value * 0.28)
-const totalRuleNetto = computed(() => totalRuleEinnahme.value - totalRuleSteuer.value)
-
-// Synchronisiere die Tage, damit die Summe nie über 365 liegt
-watch(mainDays, (val) => {
-    if (val + offDays.value > 365) {
-        offDays.value = 365 - val
-    }
-})
-watch(offDays, (val) => {
-    if (val + mainDays.value > 365) {
-        mainDays.value = 365 - val
-    }
-})
-
-// Script: Drei Dialog-States für Details
 const showMainCostDetails = ref(false)
 const showOffCostDetails = ref(false)
 const showTotalCostDetails = ref(false)
+const showInfo = ref(false)
 
-function getCurrentState() {
-    return {
-        mainDays: mainDays.value,
-        offDays: offDays.value,
-        mainOccupancy: mainOccupancy.value,
-        offOccupancy: offOccupancy.value,
-        mainCalcType: mainCalcType.value,
-        offCalcType: offCalcType.value,
-        mainRooms: mainRooms.value,
-        roomPrice: roomPrice.value,
-        houseCount: houseCount.value,
-        bedPrice: bedPrice.value,
-        housePrice: housePrice.value,
-        monthlyPrice: monthlyPrice.value,
-        beds: beds.value,
-        mainCleanings: mainCleanings.value,
-        offCleanings: offCleanings.value,
-        cleaningCost: cleaningCost.value,
-        tax: tax.value,
-        gasCost: gasCost.value,
-        powerCost: powerCost.value,
-        softwareCost: softwareCost.value,
-        repairCost: repairCost.value,
-        abgabe: abgabe.value,
+function shareCalculation() {
+    const params = new URLSearchParams()
+    const state = store.getCurrentState()
+    Object.entries(state).forEach(([key, value]) => {
+        params.set(key, value)
+    })
+    const path = router.currentRoute.value.fullPath.split('?')[0]
+    const url = `${window.location.origin}/#${path}?${params.toString()}`
+    navigator.clipboard.writeText(url)
+    $q.notify({ message: t('rentCalculator.linkCopied') })
+}
+
+function resetCalculator() {
+    store.resetCosts()
+
+    // Query-Parameter aus der URL entfernen
+    router.replace({ query: {} })
+}
+
+onMounted(() => {
+    store.loadEntries()
+    // Werte aus Query übernehmen, falls vorhanden
+    const params = route.query
+    updateStateFromQuery(params)
+})
+
+watch(
+    () => route.query,
+    (params) => {
+        updateStateFromQuery(params)
+    },
+    { deep: true },
+)
+
+function updateStateFromQuery(params) {
+    if (Object.keys(params).length > 0) {
+        const state = {}
+        Object.entries(params).forEach(([key, value]) => {
+            const v = Array.isArray(value) ? value[0] : value
+            const num = Number(v)
+            state[key] = isNaN(num) ? v : num
+        })
+        store.setState(state)
     }
 }
-
-function setState(state) {
-    mainDays.value = state.mainDays
-    offDays.value = state.offDays
-    mainOccupancy.value = state.mainOccupancy
-    offOccupancy.value = state.offOccupancy
-    mainCalcType.value = state.mainCalcType
-    offCalcType.value = state.offCalcType
-    mainRooms.value = state.mainRooms
-    roomPrice.value = state.roomPrice
-    houseCount.value = state.houseCount
-    bedPrice.value = state.bedPrice
-    housePrice.value = state.housePrice
-    monthlyPrice.value = state.monthlyPrice
-    beds.value = state.beds
-    mainCleanings.value = state.mainCleanings
-    offCleanings.value = state.offCleanings
-    cleaningCost.value = state.cleaningCost
-    tax.value = state.tax
-    gasCost.value = state.gasCost
-    powerCost.value = state.powerCost
-    softwareCost.value = state.softwareCost
-    repairCost.value = state.repairCost
-    if (typeof state.abgabe === 'number') abgabe.value = state.abgabe
-}
-
-function saveEntry() {
-    const entry = getCurrentState()
-    entry.name = saveName.value
-    let entries = JSON.parse(localStorage.getItem('rentCalcEntries') || '[]')
-    // Überschreibe, falls Name schon existiert
-    entries = entries.filter((e) => e.name !== entry.name)
-    entries.push(entry)
-    localStorage.setItem('rentCalcEntries', JSON.stringify(entries))
-    showSaveDialog.value = false
-    saveName.value = ''
-    loadEntries()
-    selectedEntry.value = entry
-}
-
-function loadEntries() {
-    savedEntries.value = JSON.parse(localStorage.getItem('rentCalcEntries') || '[]')
-}
-
-function loadEntry(entry) {
-    if (entry && entry.name) setState(entry)
-}
-
-function deleteEntry(entry) {
-    const name = entry && entry.name ? entry.name : entry
-    let entries = JSON.parse(localStorage.getItem('rentCalcEntries') || '[]')
-    entries = entries.filter((e) => e.name !== name)
-    localStorage.setItem('rentCalcEntries', JSON.stringify(entries))
-    loadEntries()
-    selectedEntry.value = null
-}
-
-function resetCosts() {
-    cleaningCost.value = 35
-    tax.value = 6
-    gasCost.value = 60
-    powerCost.value = 50
-    softwareCost.value = 10
-    repairCost.value = 30
-}
-
-onMounted(loadEntries)
 </script>
